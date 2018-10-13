@@ -1,6 +1,7 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const cors = require('cors')
+const Translation = require('./models/dictionary')
 const app = express()
 
 // Luodaan middleware logger ja error
@@ -47,27 +48,41 @@ app.get('/', (req, res) => {
   res.send('Hello world')
 })
 
-app.get('/morse', (req, res) => {
-  res.json(morse)
-})
-
-app.get('/morse/:id', (req, res) => {
-  const id = parseInt(req.params.id)
-  const letter = morse.find(letter => letter.id === id)
-
-  if( letter ) {
-      res.json(letter)
-  } else {
-    res.status(404).json({ error: 'sivua ei löydy' })
+formatData = (data) => {
+  return {
+    letter: data.letter,
+    code: data.code,
+    id: data._id
   }
-})
-
-const generateId = () => {
-  let maxId = morse.length > 0 ? morse.map(n => n.id).sort((a, b) => a - b).reverse()[0] : 1
-  return maxId + 1
 }
 
-app.post('/morse', (req, res) => {
+app.get('/api/morse', (req, res) => {
+  Translation
+    .find({})
+    .then(data => {
+      res.json(data.map(formatData))
+    })
+})
+
+app.get('/api/morse/:id', (req, res) => {
+  Translation
+    .findById(req.params.id)
+    .then(data => {
+      if (data) {
+        res.json(formatData(data))
+      } else {
+        res.status(404).end()
+      }
+    })
+    .catch(error => {
+      console.log(error)
+      res.status(400).send({ error: 'malformatted id' })
+    })
+
+
+})
+
+app.post('/api/morse', (req, res) => {
   const body = req.body
 
   if (body.letter === undefined || body.code === undefined) {
@@ -78,21 +93,48 @@ app.post('/morse', (req, res) => {
     return res.status(400).json({ error: 'letter or code missing' })
   }
 
-  const letter = {
+  const data = new Translation({
     letter: body.letter,
     code: body.code,
-    id: generateId(),
     date: new Date()
-  }
+  })
 
-  res.json(letter)
+  data
+    .save()
+    .then(savedData => {
+      res.json(formatData(savedData))
+    })
 })
 
-app.delete('/morse/:id', (req, res) => {
-  const id = parseInt(req.params.id)
-  morse = morse.filter(letter => letter.id !== id)
+app.put('/api/morse/:id', (req, res) => {
+  const body = req.body
 
-  res.status(204).end()
+  const data = {
+    letter: body.letter,
+    code: body.code
+  }
+
+  Translation
+    .findByIdAndUpdate(req.params.id, data, { new: true } )
+    .then(updatedData => {
+      res.json(formatData(updatedData))
+    })
+    .catch(error => {
+      console.log(error)
+      res.status(400).send({ error: 'malformatted id' })
+    })
+})
+
+app.delete('/api/morse/:id', (req, res) => {
+  Translation
+    .findByIdAndRemove(req.params.id)
+    .then(result => {
+      res.status(204).end()
+    })
+    .catch(error => {
+      console.log(error)
+      res.status(400).send({ error: 'malformatted id' })
+    })
 })
 
 app.use(error)
